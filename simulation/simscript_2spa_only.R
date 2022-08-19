@@ -5,6 +5,7 @@
 
 
 library(SimDesign)
+library(RPushbullet)
 
 DESIGNFACTOR <- createDesign(
   n = c(100, 250, 1000),
@@ -437,11 +438,12 @@ res <-
     seed = rep(670084, nrow(DESIGNFACTOR)),
     save = TRUE,
     save_results = TRUE,
-    filename = "sim1_try",
+    filename = "simulation/simres_2spa_only",
     save_details = list(
-      save_results_dirname = "simresults_1_try"
+      save_results_dirname = "simulation/simdetails_2spa_only"
     ),
     # allow_na = TRUE,
     parallel = TRUE,
-    ncores = min(4L, parallel::detectCores() - 1)
+    ncores = min(4L, parallel::detectCores() - 1), 
+    notification = "condition"
   )
