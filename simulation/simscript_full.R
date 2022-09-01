@@ -7,7 +7,7 @@
 library(SimDesign)
 
 DESIGNFACTOR <- createDesign(
-  n = c(100, 250, 1000),
+  n = c(100, 250, 1000), 
   r_ni = c(0, .25, .55),
   kappa2 = c(0, 0.25), 
   misspecify = c(FALSE, TRUE)
@@ -23,6 +23,36 @@ get_ucov <- function(p, scale = sqrt(0.1), seed = 123, n = 5) {
 }
 # Global covariance matrix for minor factors
 UCOV <- get_ucov(20)
+
+# Fixed objects
+FIXEDOBJECTS <- list(
+  ucov = UCOV,
+  n_waves = 4,
+  n_items = 5,
+  theta_growth = .50,
+  kappa1 = 0,
+  Psi_growth = matrix(c(.5, .089, .089, .1), nrow = 2),
+  kappa3 = -0.01,
+  phi33 = 0.004,
+  lambda_vec = c(.8, .5, .7, .65, .7),
+  nu_vec = c(0, .5, -.25, .25, -.5),
+  lambda_deviation =
+    list(`0.25` = rbind(0, 0, 0, 0, seq(0, 0.3, length.out = 4)),
+         `0.55` = rbind(0, 0,
+                        c(0, 0.2, 0.3, 0.1),
+                        c(0, -0.05, 0, 0.05),
+                        seq(0, 0.3, length.out = 4))),
+  nu_deviation =
+    list(`0.25` = rbind(0, 0, 0,
+                        seq(0, 0.75, length.out = 4),
+                        c(0, 0.125, -0.125, 0)),
+         `0.55` = rbind(c(0, 0.75, 0.5, 0.25),
+                        c(0, 0.25, 0, 0.50),
+                        0,
+                        seq(0, 0.75, length.out = 4),
+                        c(0, 0.125, -0.125, 0))),
+  ar_rho = .20  # autoregressive coefficient
+)
 
 # Function for Simulations ------------------------------------------------
 
@@ -96,34 +126,7 @@ generate <- function(condition, fixed_objects = NULL) {
   as.data.frame(dat)
 }
 # Test:
-# dat <- generate(DESIGNFACTOR[1, ], fixed_objects = list(
-#   ucov = UCOV,
-#   n_waves = 4,
-#   n_items = 5,
-#   theta_growth = .50,
-#   kappa1 = 0,
-#   Psi_growth = matrix(c(.5, .089, .089, .1), nrow = 2),
-#   kappa3 = -0.01,
-#   phi33 = 0.004,
-#   lambda_vec = c(.8, .5, .7, .65, .7),
-#   nu_vec = c(0, .5, -.25, .25, -.5),
-#   lambda_deviation =
-#     list(`0.25` = rbind(0, 0, 0, 0, seq(0, 0.3, length.out = 4)),
-#          `0.55` = rbind(0, 0,
-#                         c(0, 0.2, 0.3, 0.1),
-#                         c(0, -0.05, 0, 0.05),
-#                         seq(0, 0.3, length.out = 4))),
-#   nu_deviation =
-#     list(`0.25` = rbind(0, 0, 0,
-#                         seq(0, 0.75, length.out = 4),
-#                         c(0, 0.125, -0.125, 0)),
-#          `0.55` = rbind(c(0, 0.75, 0.5, 0.25),
-#                         c(0, 0.25, 0, 0.50),
-#                         0,
-#                         seq(0, 0.75, length.out = 4),
-#                         c(0, 0.125, -0.125, 0))),
-#   ar_rho = .20  # autoregressive coefficient
-# ))
+# dat <- generate(DESIGNFACTOR[15, ], fixed_objects = FIXEDOBJECTS)
 
 fit_config <- function(dat, n_waves, n_items) {
   ynames <- outer(seq_len(n_items), seq_len(n_waves), paste0)
@@ -146,6 +149,43 @@ fit_config <- function(dat, n_waves, n_items) {
 }
 # Test:
 # fit_config(dat, n_waves = 4, n_items = 5)
+
+fit_partial_strong <- function(dat, n_waves, n_items, r_ni, 
+                               fixed_objects) {
+  r_ni_char <- as.character(r_ni)
+  lambdas <- matrix(rep(paste0("l", seq_len(n_items)), n_waves), 
+                    nrow = 5)
+  nus <- matrix(rep(paste0("n", seq_len(n_items)), n_waves), 
+                nrow = 5)
+  if (r_ni > 0) {
+    lambdas[fixed_objects$lambda_deviation[[r_ni_char]] != 0] <- "NA"
+    nus[fixed_objects$lambda_deviation[[r_ni_char]] != 0] <- "NA"
+  }
+  
+  ynames <- outer(seq_len(n_items), seq_len(n_waves), paste0)
+  lamb_y <- matrix(paste0(lambdas, " * ", "y", ynames), 
+                   nrow = n_waves, byrow = TRUE)
+  lamb_lines <- apply(lamb_y, 1, function(x) paste0(x, collapse = " + "))
+  nu_lines <- paste0("y", ynames, " ~ ", nus, " * ", 1)
+  mod <- paste0(
+    c(paste0("eta", seq_len(n_waves), " =~ ", lamb_lines,
+             collapse = "\n"),
+      nu_lines, 
+      "eta1 ~ 0 * 1", "eta1 ~~ 1 * eta1", 
+      paste0(
+        apply(ynames, 1, function(x) {
+          combn(paste0("y", x), 2, FUN = paste0, collapse = " ~~ ")
+        }),
+        collapse = "\n"
+      )
+    ),
+    collapse = "\n"
+  )
+  lavaan::cfa(mod, data = dat)
+}
+# Test:
+p_strong_fit <- fit_partial_strong(dat, n_waves = 4, n_items = 5,
+                                   r_ni = 0.25, fixed_objects = FIXEDOBJECTS)
 
 align_lambda_nu <- function(config_pars, ...) {
   config_lambda <- config_pars$lambda
@@ -258,8 +298,8 @@ fit_2nd_growth_w_starts <- function(dat, n_waves, n_items,
   lavaan::growth(growth_model, data = dat)
 }
 
-# Get factor scores
-get_fs <- function(config_fit, aligned_pars, n_waves, n_items) {
+# Get factor scores (with alignment)
+get_fs_align <- function(config_fit, aligned_pars, n_waves, n_items) {
   pars_cf <- lavInspect(config_fit, what = "est")
   ey <- config_fit@implied$mean[[1]]
   yc <- sweep(config_fit@Data@X[[1]], MARGIN = 2, STATS = ey)
@@ -276,6 +316,35 @@ get_fs <- function(config_fit, aligned_pars, n_waves, n_items) {
   colnames(fs) <- paste0("fs_", paste0("eta", seq_len(n_waves)))
   list(fs = fs, ev = ev)
 }
+
+# Get factor score (regression & Bartlett)
+# get_fs_ps <- function(p_strong_fit, dat, n_items) {
+#   fsr <- lavPredict(p_strong_fit, method = "regression")
+#   fsb <- lavPredict(p_strong_fit, method = "regression")
+#   fsr_rel_g <- fsb_rel_g <- rep(NA, 4)
+#   for (i in 1:4) {
+#     ynames <- paste0("y", seq_len(n_items), i)
+#     sigma <- lavInspect(p_strong_fit, what = "implied")$cov[ynames, ynames]
+#     psi <- lavInspect(p_strong_fit, what = "est")$psi[]
+#     lambda <- lavInspect(p_strong_fit, what = "est")[[i]]$lambda
+#     theta <- lavInpsect(p_strong_fit, what = "est")[[i]]$theta
+#     fsr_rel_g[i] <- fx_psi %*% t(fx_lambda) %*% solve(fx_sigma) %*% fx_lambda
+#     fsb_rel_g[i] <- fx_psi / (fx_psi + solve(t(fx_lambda) %*% 
+#                                                 solve(fx_theta) %*% fx_lambda))
+#   }
+#   fsr_rel <- rep(fsr_rel_g, unlist(lapply(fsr, length)))
+#   fsb_rel <- rep(fsb_rel_g, unlist(lapply(fsb, length)))
+#   
+#   # append to dat
+#   dat$fsr <- fsr
+#   dat$fsb <- fsb
+#   dat$fsr_rel <- fsr_rel
+#   dat$fsb_rel <- fsb_rel
+#   
+#   return(dat)
+# }
+# Test:
+# get_fs_ps(p_strong_fit, dat)
 
 fit_2spa_growth <- function(fs, ev_fs, n_waves) {
   growth_model <- paste0(c(
@@ -323,15 +392,24 @@ extract_res <- function(object, pars = c("i~1", "s~1", "i~~i", "s~~s"),
   c(scaled_ests, scaled_ses)
 }
 
+# get ev
+lambda <- lavInspect(p_strong_fit, what = "est")$lambda
+theta <- lavInspect(p_strong_fit, what = "est")$theta
+thinv_lam <- solve(theta, lambda)
+ev <- solve(crossprod(thinv_lam, lambda))
+
+lavPredict(p_strong_fit, method = "Bartlett", acov = "standard")
+
 analyse <- function(condition, dat, fixed_objects = NULL) {
   n_waves <- fixed_objects$n_waves
   n_items <- fixed_objects$n_items
   # Initialize output
-  methods <- c("PI", "FI", "AwG", "TSPA")
+  methods <- c("PI", "FI", "AwG", "TSPAA", "TSAPB")
   pars <- c("meani", "means", "vari", "vars")
   stats <- c("est", "ase")
   out <- vector("list", length(methods))
   names(out) <- methods
+  
   # Growth model (assuming invariance)
   lambda_labels <- matrix(paste0("l", seq_len(n_items)),
                           nrow = n_waves, ncol = n_items,
@@ -345,6 +423,7 @@ analyse <- function(condition, dat, fixed_objects = NULL) {
                                            lambda_prefix = lambda_labels,
                                            nu_prefix = nu_labels)
   out$FI <- extract_res(growth_fit_fi)
+  
   # Growth model (partial invariance)
   if (condition$r_ni == 0) {
     growth_fit_pi <- growth_fit_fi
@@ -367,6 +446,7 @@ analyse <- function(condition, dat, fixed_objects = NULL) {
                                              nu_prefix = nu_labels)
   }
   out$PI <- extract_res(growth_fit_pi)
+  
   # Configural model
   config_fit <- fit_config(dat, n_waves = n_waves, n_items = n_items)
   # Alignment
@@ -381,10 +461,21 @@ analyse <- function(condition, dat, fixed_objects = NULL) {
     nu_start = aligned_pars$nu.aligned
   )
   out$AwG <- extract_res(growth_fit_awg)
-  # Growth model (2SPA)
-  fs_ev <- get_fs(config_fit, aligned_pars, n_waves, n_items)
-  growth_fit_2spa <- fit_2spa_growth(fs_ev$fs, fs_ev$ev, n_waves)
-  out$TSPA <- extract_res(growth_fit_2spa, tspa = TRUE)
+  
+  # Growth model (2SPA with Alignment)
+  fs_ev <- get_fs_align(config_fit, aligned_pars, n_waves, n_items)
+  growth_fit_2spa_align <- fit_2spa_growth(fs_ev$fs, fs_ev$ev, n_waves)
+  out$TSPAA <- extract_res(growth_fit_2spa_align, tspa = TRUE)
+  
+  # Growth model (2SPA with Bartlett Scores)
+  eta_names <- paste0("eta", seq_len(n_waves))
+  fsb <- lavPredict(growth_fit_pi, method = "Bartlett")[, eta_names]
+  colnames(fsb) <- paste0("fs_", eta_names)
+  evb <- attr(lavPredict(growth_fit_pi, method = "Bartlett", acov = "standard"), 
+              "acov")[[1]][eta_names, eta_names]
+  growth_fit_2spa_bart <- fit_2spa_growth(fsb, evb, n_waves)
+  out$TSPAB <- extract_res(growth_fit_2spa_bart, tspa = TRUE)
+  
   # Reorder output
   out <- unlist(out)[c(aperm(array(seq_len(length(methods) * length(stats) *
                                              length(pars)),
@@ -399,12 +490,12 @@ analyse <- function(condition, dat, fixed_objects = NULL) {
   out
 }
 # Test:
-# analyse(DESIGNFACTOR[1, ], dat,
-#         fixed_objects = list(n_waves = 4, n_items = 5))
+analyse(DESIGNFACTOR[15, ], dat,
+        fixed_objects = list(n_waves = 4, n_items = 5))
 
 evaluate <- function(condition, results, fixed_objects = NULL) {
   # Specify population value
-  methods <- c("PI", "FI", "AwG", "TSPA")
+  methods <- c("PI", "FI", "AwG", "TSPAA", "TSPAB")
   pars <- c("meani", "means", "vari", "vars")
   pop <- rep(c(fixed_objects$kappa1, condition$kappa2, 
                diag(fixed_objects$Psi_growth)), each = length(methods))
@@ -445,45 +536,18 @@ evaluate <- function(condition, results, fixed_objects = NULL) {
 res <-
   runSimulation(
     design = DESIGNFACTOR,
-    replications = 2500,
+    replications = 2,
     generate = generate,
     analyse = analyse,
     summarise = evaluate,
     packages = c("Matrix", "lavaan", "mvnfast", "sirt"),
-    fixed_objects = list(
-      ucov = UCOV,
-      n_waves = 4,
-      n_items = 5,
-      theta_growth = .50,
-      kappa1 = 0,
-      Psi_growth = matrix(c(.5, .089, .089, .1), nrow = 2),
-      kappa3 = -0.01,
-      phi33 = 0.004,
-      lambda_vec = c(.8, .5, .7, .65, .7),
-      nu_vec = c(0, .5, -.25, .25, -.5),
-      lambda_deviation =
-        list(`0.25` = rbind(0, 0, 0, 0, seq(0, 0.3, length.out = 4)),
-             `0.55` = rbind(0, 0,
-                            c(0, 0.2, 0.3, 0.1),
-                            c(0, -0.05, 0, 0.05),
-                            seq(0, 0.3, length.out = 4))),
-      nu_deviation =
-        list(`0.25` = rbind(0, 0, 0,
-                            seq(0, 0.75, length.out = 4),
-                            c(0, 0.125, -0.125, 0)),
-             `0.55` = rbind(c(0, 0.75, 0.5, 0.25),
-                            c(0, 0.25, 0, 0.50),
-                            0,
-                            seq(0, 0.75, length.out = 4),
-                            c(0, 0.125, -0.125, 0))),
-      ar_rho = .20  # autoregressive coefficient
-    ), 
+    fixed_objects = FIXEDOBJECTS, 
     seed = rep(670084, nrow(DESIGNFACTOR)),
     save = TRUE,
     save_results = TRUE,
-    filename = "sim1_try",
+    filename = "simulation/simresults",
     save_details = list(
-      save_results_dirname = "simresults_1_try"
+      save_results_dirname = "simulation/simdetails"
     ),
     # allow_na = TRUE,
     parallel = TRUE,
