@@ -1,5 +1,5 @@
 ---
-title: "Simulation Summary (2S-PA Only)"
+title: "Simulation Summary"
 author: "Winnie Wing-Yee Tse"
 date: "`r Sys.Date()`"
 output: pdf_document
@@ -11,14 +11,14 @@ library(tidyverse)
 
 
 ```{r}
-simres <- readRDS("simres_2spa_only.rds")
+simres <- readRDS("simresults.rds")
 ```
 
 ```{r}
 simres_long <- simres %>%
   tibble::rowid_to_column("cond") %>%
   pivot_longer(
-    bias.est_TSPA_meani:coverage.ci_TSPA_vars, 
+    bias.est_PI_meani:coverage.ci_TSAPB_vars, 
     names_to = c("criteria", "method", "stat", "par"), 
     values_to = "value", 
     names_pattern = "(.*)_(.*)_(.*)(.)"
@@ -37,9 +37,10 @@ simres_long %>%
   geom_point(aes(shape = n, col = misspecify), 
              position = position_jitter(width = .01)) +
   # geom_line(aes(shape = n, col = misspecify)) +
-  facet_grid(~ kappa2) +
-  ylim(-.05, .2) +
-  labs(title = "Bias for estimating mean intercept")
+  facet_grid(kappa2 ~ method) +
+  # ylim(-.05, .2) +
+  labs(x = "Proportion of noninvariant items/parameters", 
+       y = "Bias", title = "Bias for estimating mean intercept")
 ```
 
 ```{r}
@@ -51,9 +52,9 @@ simres_long %>%
   geom_point(aes(shape = n, col = misspecify), 
              position = position_jitter(width = .01)) +
   # geom_line(aes(shape = n, col = misspecify)) +
-  facet_grid(~ kappa2) +
-  ylim(-.01, .12) +
-  labs(title = "Bias for estimating mean slope")
+  facet_grid(kappa2 ~ method) +
+  labs(x = "Proportion of noninvariant items/parameters", 
+       y = "Bias", title = "Bias for estimating mean slope")
 ```
 
 ## Standardized Bias
@@ -67,8 +68,10 @@ simres_long %>%
   geom_point(aes(shape = n, col = misspecify), 
              position = position_jitter(width = .01)) +
   # geom_line(aes(shape = n, col = misspecify)) +
-  facet_grid(~ kappa2) +
-  labs(title = "Bias for estimating mean intercept")
+  facet_grid(kappa2 ~ method) +
+  labs(x = "Proportion of noninvariant items/parameters", 
+       y = "Standardized bias", 
+       title = "Standardized Bias for estimating mean intercept")
 ```
 
 ```{r}
@@ -80,8 +83,10 @@ simres_long %>%
   geom_point(aes(shape = n, col = misspecify), 
              position = position_jitter(width = .01)) +
   # geom_line(aes(shape = n, col = misspecify)) +
-  facet_grid(~ kappa2) +
-  labs(title = "Bias for estimating mean slope")
+  facet_grid(kappa2 ~ method) +
+  labs(x = "Proportion of noninvariant items/parameters", 
+       y = "Standardized bias", 
+       title = "Standardized Bias for estimating mean slope")
 ```
 
 ## RMSE
@@ -95,8 +100,10 @@ simres_long %>%
   geom_point(aes(shape = n, col = misspecify), 
              position = position_jitter(width = .01)) +
   # geom_line(aes(shape = n, col = misspecify)) +
-  facet_grid(~ kappa2) +
-  labs(title = "Bias for estimating mean intercept")
+  facet_grid(kappa2 ~ method) +
+  labs(x = "Proportion of noninvariant items/parameters", 
+       y = "Root mean squared error", 
+       title = "RMSE for estimating mean intercept")
 ```
 
 ```{r}
@@ -108,8 +115,10 @@ simres_long %>%
   geom_point(aes(shape = n, col = misspecify), 
              position = position_jitter(width = .01)) +
   # geom_line(aes(shape = n, col = misspecify)) +
-  facet_grid(~ kappa2) +
-  labs(title = "Bias for estimating mean slope")
+  facet_grid(kappa2 ~ method) +
+  labs(x = "Proportion of noninvariant items/parameters", 
+       y = "Root mean squared error", 
+       title = "RMSE for estimating mean slope")
 ```
 
 
@@ -124,8 +133,10 @@ simres_long %>%
   geom_point(aes(shape = n, col = misspecify), 
              position = position_jitter(width = .01)) +
   # geom_line(aes(shape = n, col = misspecify)) +
-  facet_grid(~ kappa2) +
-  labs(title = "Bias for estimating mean intercept")
+  facet_grid(kappa2 ~ method) +
+  labs(x = "Proportion of noninvariant items/parameters", 
+       y = "Confidence interval converage", 
+       title = "Coverage for estimating mean intercept")
 ```
 
 ```{r}
@@ -137,7 +148,9 @@ simres_long %>%
   geom_point(aes(shape = n, col = misspecify), 
              position = position_jitter(width = .01)) +
   # geom_line(aes(shape = n, col = misspecify)) +
-  facet_grid(~ kappa2) +
-  labs(title = "Bias for estimating mean slope")
+  facet_grid(kappa2 ~ method) +
+  labs(x = "Proportion of noninvariant items/parameters", 
+       y = "Confidence interval converage", 
+       title = "Coverage for estimating mean slope")
 ```
 
