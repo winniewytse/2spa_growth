@@ -393,12 +393,12 @@ extract_res <- function(object, pars = c("i~1", "s~1", "i~~i", "s~~s"),
 }
 
 # get ev
-lambda <- lavInspect(p_strong_fit, what = "est")$lambda
-theta <- lavInspect(p_strong_fit, what = "est")$theta
-thinv_lam <- solve(theta, lambda)
-ev <- solve(crossprod(thinv_lam, lambda))
-
-lavPredict(p_strong_fit, method = "Bartlett", acov = "standard")
+# lambda <- lavInspect(p_strong_fit, what = "est")$lambda
+# theta <- lavInspect(p_strong_fit, what = "est")$theta
+# thinv_lam <- solve(theta, lambda)
+# ev <- solve(crossprod(thinv_lam, lambda))
+# 
+# lavPredict(p_strong_fit, method = "Bartlett", acov = "standard")
 
 analyse <- function(condition, dat, fixed_objects = NULL) {
   n_waves <- fixed_objects$n_waves
@@ -536,7 +536,7 @@ evaluate <- function(condition, results, fixed_objects = NULL) {
 res <-
   runSimulation(
     design = DESIGNFACTOR,
-    replications = 2,
+    replications = 2500,
     generate = generate,
     analyse = analyse,
     summarise = evaluate,
