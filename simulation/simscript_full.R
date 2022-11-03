@@ -382,13 +382,16 @@ extract_res <- function(object, pars = c("i~1", "s~1", "i~~i", "s~~s"),
   if (!tspa) {
     sum_load <- coefs["sum_load"]
     sum_int <- coefs["sum_int"]
-    scaled_ests[1] <- (sum_int - true_int + sum_load * scaled_ests[1]) /
-      true_load
-    scaled_ests[2] <- scaled_ests[2] * sum_load / true_load
-    scaled_ests[3:4] <- (sum_load / true_load)^2 * scaled_ests[3:4]
-    scaled_ses[1:2] <- (sum_load / true_load) * scaled_ses[1:2]
-    scaled_ses[3:4] <- (sum_load / true_load) * scaled_ses[3:4]
+  } else {
+    sum_load <- sum(true_load)
+    sum_int <- sum(true_int)
   }
+  scaled_ests[1] <- (sum_int - true_int + sum_load * scaled_ests[1]) /
+    true_load
+  scaled_ests[2] <- scaled_ests[2] * sum_load / true_load
+  scaled_ests[3:4] <- (sum_load / true_load)^2 * scaled_ests[3:4]
+  scaled_ses[1:2] <- (sum_load / true_load) * scaled_ses[1:2]
+  scaled_ses[3:4] <- (sum_load / true_load) * scaled_ses[3:4]
   c(scaled_ests, scaled_ses)
 }
 
@@ -551,5 +554,5 @@ res <-
     ),
     # allow_na = TRUE,
     parallel = TRUE,
-    ncores = min(4L, parallel::detectCores() - 1)
+    ncores = min(7L, parallel::detectCores() - 1)
   )
