@@ -8,6 +8,7 @@ output: pdf_document
 ```{r}
 library(SimDesign)
 library(lavaan)
+library(tidyverse)
 ```
 
 ## Setup (design factors and global parameters)
@@ -377,7 +378,7 @@ extract_res <- function(object, pars = c("i~1", "s~1", "i~~i", "s~~s"),
 # Investigation
 
 ```{r}
-condition <- DESIGNFACTOR[2, ]
+condition <- DESIGNFACTOR[1, ]
 dat <- generate(condition, fixed_objects = FIXEDOBJECTS)
 ```
 
@@ -496,22 +497,38 @@ names(out) <- aperm(names_out, perm = c(2, 3, 1))
 ```{r}
 # mean_i = 0, mean_s = .25
 # var_i = = .5, var_s = .1
-round(out, 3)
+round(out, 4)
 ```
 
 ## Reevaluate simulation results
 
 ```{r}
-simres <- readRDS("simulation/simresults.rds")
+simres <- readRDS(here::here("simulation/simresults.rds"))
 ```
+
+```{r}
+get_emp_se <- function(condition, results, fixed_objects = NULL) {
+  methods <- c("PI", "FI", "AwG", "TSPAA", "TSPAB")
+  pars <- c("meani", "means", "vari", "vars")
+  results_est <- results[ , grep("^est_", colnames(results))]
+  emp_se <- apply(results_est, 2, sd)
+  emp_se
+}
+```
+
+```{r}
+emp_se <- reSummarise(get_emp_se, dir = here::here("simulation/simdetails/"), 
+                      fixed_objects = FIXEDOBJECTS)
+```
+
 
 ```{r}
 reevaluate <- function(condition, results, fixed_objects = NULL) {
   # Specify population value
   methods <- c("PI", "FI", "AwG", "TSPAA", "TSPAB")
   pars <- c("meani", "means", "vari", "vars")
-  pop <- rep(c(fixed_objects$kappa1, condition$kappa2, 
-               diag(fixed_objects$Psi_growth)), each = length(methods))
+  pop <- rep(c(fixed_objects[[1]]$kappa1, condition$kappa2, 
+               diag(fixed_objects[[1]]$Psi_growth)), each = length(methods))
   results_est <- results[ , grep("^est_", colnames(results))]
   results_ase <- results[ , grep("^ase_", colnames(results))]
   results_ci <- matrix(
@@ -526,7 +543,10 @@ reevaluate <- function(condition, results, fixed_objects = NULL) {
     parameter = 0
   )
   names(ret_ci) <- gsub("est_", "ci_", colnames(results_est))
+  # check the ase bias (SD of point estimates)
   ret_ase <- apply(results_ase, 2, mean)
+  emp_se <- subset(as.data.frame(fixed_objects[[2]]), n == condition$n & r_ni == condition$r_ni &
+                   kappa2 == condition$kappa2 & misspecify == condition$misspecify)[-c(1:4)]
   ret <- c(
     bias = SimDesign::bias(
       results_est,
@@ -540,20 +560,30 @@ reevaluate <- function(condition, results, fixed_objects = NULL) {
       parameter = pop
     ),
     coverage = ret_ci, 
-    ase = ret_ase
+    est = ret_ase, 
+    ase_bias = ret_ase - as.numeric(emp_se)
   )
   ret
 }
 ```
 
+
 ```{r}
-simres_r <- reSummarise(reevaluate, dir = "simulation/simdetails/", 
-                        fixed_objects = FIXEDOBJECTS)
+# test
+# row1 <- readRDS(here::here("simulation/simdetails/results-row-1.rds"))
+# reevaluate(DESIGNFACTOR[1, ], row1$results, 
+#            fixed_objects = list(FIXEDOBJECTS, as.matrix(emp_se)))
+```
+
+
+```{r}
+simres_r <- reSummarise(reevaluate, dir = here::here("simulation/simdetails/"), 
+                        fixed_objects = list(FIXEDOBJECTS, as.matrix(emp_se)))
 ```
 
 ```{r}
 simres_r %>%
   filter(n == 1000, r_ni == .25, kappa2 == .25, misspecify == FALSE) %>%
-  select(contains("ase"))
+  select(contains("ase_bias"))
 ```
 * Observation: asymptotic SE is smaller for 2SPA with Bartlett scores
