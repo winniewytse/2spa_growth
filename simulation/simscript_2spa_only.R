@@ -25,6 +25,36 @@ get_ucov <- function(p, scale = sqrt(0.1), seed = 123, n = 5) {
 # Global covariance matrix for minor factors
 UCOV <- get_ucov(20)
 
+# Fixed objects
+FIXEDOBJECTS <- list(
+  ucov = UCOV,
+  n_waves = 4,
+  n_items = 5,
+  theta_growth = .50,
+  kappa1 = 0,
+  Psi_growth = matrix(c(.5, .089, .089, .1), nrow = 2),
+  kappa3 = -0.01,
+  phi33 = 0.004,
+  lambda_vec = c(.8, .5, .7, .65, .7),
+  nu_vec = c(0, .5, -.25, .25, -.5),
+  lambda_deviation =
+    list(`0.25` = rbind(0, 0, 0, 0, seq(0, 0.3, length.out = 4)),
+         `0.55` = rbind(0, 0,
+                        c(0, 0.2, 0.3, 0.1),
+                        c(0, -0.05, 0, 0.05),
+                        seq(0, 0.3, length.out = 4))),
+  nu_deviation =
+    list(`0.25` = rbind(0, 0, 0,
+                        seq(0, 0.75, length.out = 4),
+                        c(0, 0.125, -0.125, 0)),
+         `0.55` = rbind(c(0, 0.75, 0.5, 0.25),
+                        c(0, 0.25, 0, 0.50),
+                        0,
+                        seq(0, 0.75, length.out = 4),
+                        c(0, 0.125, -0.125, 0))),
+  ar_rho = .20  # autoregressive coefficient
+)
+
 # Function for Simulations ------------------------------------------------
 
 
@@ -259,35 +289,120 @@ fit_2nd_growth_w_starts <- function(dat, n_waves, n_items,
   lavaan::growth(growth_model, data = dat)
 }
 
-# Get factor scores
-get_fs <- function(config_fit, aligned_pars, n_waves, n_items) {
-  pars_cf <- lavInspect(config_fit, what = "est")
-  ey <- config_fit@implied$mean[[1]]
-  yc <- sweep(config_fit@Data@X[[1]], MARGIN = 2, STATS = ey)
-  lam <- Matrix::bdiag(split(aligned_pars$lambda.aligned, 
-                             rep(seq_len(n_waves), n_items)))
-  lam <- as.matrix(lam)
-  th <- pars_cf$theta
-  thinv_lam <- solve(th, lam)
-  fs_mat <- solve(crossprod(thinv_lam, lam), t(thinv_lam))
-  alpha <- aligned_pars$pars$alpha0
-  fs <- t(fs_mat %*% t(yc) + c(alpha))
-  # error variances of factor scores
-  ev <- solve(crossprod(thinv_lam, lam))
-  colnames(fs) <- paste0("fs_", paste0("eta", seq_len(n_waves)))
-  list(fs = fs, ev = ev)
+# Get partial model
+get_partial_mod <- function(n_waves, n_items, 
+                            lambda_prefix = NULL, 
+                            nu_prefix = NULL) {
+  yindices <- outer(seq_len(n_items), seq_len(n_waves), paste0)
+  ynames <- t(yindices)
+  ynames[] <- paste0("y", ynames)
+  load_lines <- apply(`[<-`(ynames,
+                            paste0(lambda_prefix, " * ", ynames)),
+                      1,
+                      paste0, collapse = " + ")
+  paste0(
+    c(paste0("eta", seq_len(n_waves), " =~ .8 * ", ynames[ , 1], " + ",
+             load_lines,
+             collapse = "\n  "),
+      paste0(ynames[ , 1], " ~ 0 * 1 + ",
+             nu_prefix[ , 1], " * 1", collapse = "\n  "),
+      paste0(ynames[ , -1], " ~ ",
+             nu_prefix[ , -1],
+             " * 1", collapse = "\n  "),
+      paste0(
+        apply(ynames, 2, function(x) {
+          combn(x, 2, FUN = paste0, collapse = " ~~ ")
+        }),
+        collapse = "\n  "
+      ),
+      paste0("eta", seq_len(n_waves),
+             " ~~ psi * eta", seq_len(n_waves), collapse = "\n  "),
+      paste0("eta", seq_len(n_waves), " ~ 0 * 1", collapse = "\n  "),
+      "# Sum of loadings and intercepts",
+      paste0("sum_load := .8 + ",
+             paste0(lambda_prefix[1, -1], collapse = " + ")),
+      paste0("sum_int := ",
+             paste0(nu_prefix[1, -1], collapse = " + "))
+    ),
+    collapse = "\n  "
+  )
 }
 
-fit_2spa_growth <- function(fs, ev_fs, n_waves) {
+# Get factor scores
+get_fs <- function(data, model = NULL) {
+  fit <- cfa(model, data = data)
+  est <- lavInspect(fit, what = "est")
+  y <- lavInspect(fit, what = "data")
+  compute_fscore(y,
+                 lambda = est$lambda,
+                 theta = est$theta,
+                 psi = est$psi,
+                 nu = est$nu,
+                 alpha = est$alpha,
+                 fs_matrices = TRUE)
+}
+
+# Helper function to compute factor scores, av_efs, and fsA
+compute_fscore <- function(y, lambda, theta, psi,
+                           nu = NULL, alpha = NULL,
+                           acov = FALSE,
+                           fs_matrices = FALSE) {
+  if (is.null(nu)) nu <- colMeans(y)
+  if (is.null(alpha)) alpha <- rep(0, ncol(as.matrix(lambda)))
+  covy <- lambda %*% psi %*% t(lambda) + theta
+  meany <- lambda %*% alpha + nu
+  y1c <- t(as.matrix(y)) - as.vector(meany)
+  # Bartlett score
+  ginvth <- MASS::ginv(theta)
+  tlam_invth <- crossprod(lambda, ginvth)
+  a_mat <- solve(tlam_invth %*% lambda, tlam_invth)
+  fs <- t(a_mat %*% y1c + as.vector(alpha))
+  if (fs_matrices) {
+    fsA <- unclass(a_mat %*% lambda)
+    attr(fs, "fsA") <- fsA
+    attr(fs, "fsb") <- alpha - fsA %*% alpha
+    attr(fs, "av_efs") <- a_mat %*% theta %*% t(a_mat)
+    attr(fs, "int_efs") <- a_mat %*% nu
+  }
+  fs
+}
+
+# Get 2SPA model with one group and multiple factors
+get_tspa_mod <- function(data, vc, fsA) {
+  var <- colnames(vc)
+  len <- nrow(vc)
+  
+  col <- colnames(data)
+  fs <- paste0("fs_", var)
+  colnames(vc) <- rownames(vc) <- fs
+  
+  # latent variables
+  loadings <- paste0(fsA, " * ", fs)
+  loadings_list <- split(loadings, factor(rep(var, each = len),
+                                          levels = var))
+  loadings_c <- lapply(loadings_list, function(x) {
+    paste0(x, collapse = " + ")
+  })
+  latent_var_str <- paste(var, "=~", loadings_c)
+  # error variances
+  vc_in <- !upper.tri(vc)
+  ev_rhs <- colnames(vc)[col(vc_in)[vc_in]]
+  ev_lhs <- rownames(vc)[row(vc_in)[vc_in]]
+  error_constraint_str <- paste0(ev_lhs, " ~~ ", vc[vc_in], " * ", ev_rhs)
+  
+  paste0(c(
+    "# latent variables (indicated by factor scores)",
+    latent_var_str,
+    "# constrain the errors",
+    error_constraint_str
+  ),
+  collpase = "\n")
+}
+
+# Fit 2SPA growth model
+fit_2spa_growth <- function(tspa_mod, fs, n_waves) {
   growth_model <- paste0(c(
-    paste0("eta", seq_len(n_waves), " =~ 1 * fs_", "eta", seq_len(n_waves)), 
-    "# Constrain error variances", 
-    paste0("fs_eta", seq_len(n_waves), " ~~ ", 
-           diag(ev_fs), " * fs_eta", seq_len(n_waves)), 
-    "# Constrain error covariances", 
-    paste0("fs_eta", col(lower.tri(ev_fs))[lower.tri(ev_fs)], 
-           " ~~ ", ev_fs[lower.tri(ev_fs)], 
-           " * fs_eta", row(lower.tri(ev_fs))[lower.tri(ev_fs)]), 
+    tspa_mod, 
     "# Constrain intercepts", 
     paste0("fs_eta", seq_len(n_waves), " ~ 0 * 1"), 
     "# Linear Growth Model", 
@@ -314,13 +429,16 @@ extract_res <- function(object, pars = c("i~1", "s~1", "i~~i", "s~~s"),
   if (!tspa) {
     sum_load <- coefs["sum_load"]
     sum_int <- coefs["sum_int"]
-    scaled_ests[1] <- (sum_int - true_int + sum_load * scaled_ests[1]) /
-      true_load
-    scaled_ests[2] <- scaled_ests[2] * sum_load / true_load
-    scaled_ests[3:4] <- (sum_load / true_load)^2 * scaled_ests[3:4]
-    scaled_ses[1:2] <- (sum_load / true_load) * scaled_ses[1:2]
-    scaled_ses[3:4] <- (sum_load / true_load) * scaled_ses[3:4]
+  } else {
+    sum_load <- sum(true_load)
+    sum_int <- sum(true_int)
   }
+  scaled_ests[1] <- (sum_int - true_int + sum_load * scaled_ests[1]) /
+    true_load
+  scaled_ests[2] <- scaled_ests[2] * sum_load / true_load
+  scaled_ests[3:4] <- (sum_load / true_load)^2 * scaled_ests[3:4]
+  scaled_ses[1:2] <- (sum_load / true_load) * scaled_ses[1:2]
+  scaled_ses[3:4] <- (sum_load / true_load) * scaled_ses[3:4]
   c(scaled_ests, scaled_ses)
 }
 
@@ -328,20 +446,40 @@ analyse <- function(condition, dat, fixed_objects = NULL) {
   n_waves <- fixed_objects$n_waves
   n_items <- fixed_objects$n_items
   # Initialize output
-  methods <- c("TSPA")
+  methods <- c("TSPAB")
   pars <- c("meani", "means", "vari", "vars")
   stats <- c("est", "ase")
   out <- vector("list", length(methods))
   names(out) <- methods
-  # Configural model
-  config_fit <- fit_config(dat, n_waves = n_waves, n_items = n_items)
-  # Alignment
-  config_pars <- lavaan::lavInspect(config_fit, what = "est")
-  aligned_pars <- align_lambda_nu(config_pars, fixed = TRUE)
-  # Growth model (2SPA)
-  fs_ev <- get_fs(config_fit, aligned_pars, n_waves, n_items)
-  growth_fit_2spa <- fit_2spa_growth(fs_ev$fs, fs_ev$ev, n_waves)
-  out$TSPA <- extract_res(growth_fit_2spa, tspa = TRUE)
+  
+  lambda_labels <- matrix(paste0("l", seq_len(n_items)),
+                          nrow = n_waves, ncol = n_items,
+                          byrow = TRUE)
+  nu_labels <- matrix(paste0("n", seq_len(n_items)),
+                      nrow = n_waves, ncol = n_items,
+                      byrow = TRUE)
+  if (condition$r_ni == 0.25) {
+    lambda_labels[ , n_items] <- paste0(lambda_labels[ , n_items],
+                                        seq_len(n_waves))
+    nu_labels[ , seq.int(n_items - 1, n_items)] <-
+      paste0(nu_labels[ , seq.int(n_items - 1, n_items)], seq_len(n_waves))
+  } else if (condition$r_ni == 0.55) {
+    lambda_labels[ , 3:n_items] <- paste0(lambda_labels[ , 3:n_items],
+                                          seq_len(n_waves))
+    nu_labels[ , seq.int(2, n_items)] <-
+      paste0(nu_labels[ , seq.int(2, n_items)], seq_len(n_waves))
+  }
+  
+  # Growth model (2SPA with Bartlett Scores)
+  partial_mod <- get_partial_mod(n_waves, n_items, lambda_labels, nu_labels)
+  fs_dat <- get_fs(dat, partial_mod)
+  eta_names <- paste0("eta", seq_len(n_waves))
+  colnames(fs_dat) <- paste0("fs_", eta_names)
+  tspa_mod <- get_tspa_mod(fs_dat, vc = attr(fs_dat, "av_efs"), 
+                           fsA = attr(fs_dat, "fsA"))
+  growth_fit_2spa_bart <- fit_2spa_growth(tspa_mod, fs_dat, n_waves)
+  out$TSPAB <- extract_res(growth_fit_2spa_bart, tspa = TRUE)
+  
   # Reorder output
   out <- unlist(out)[c(aperm(array(seq_len(length(methods) * length(stats) *
                                              length(pars)),
@@ -401,49 +539,21 @@ evaluate <- function(condition, results, fixed_objects = NULL) {
 
 res <-
   runSimulation(
-    design = DESIGNFACTOR,
+    design = DESIGNFACTOR[3, ],
     replications = 2500,
     generate = generate,
     analyse = analyse,
     summarise = evaluate,
     packages = c("Matrix", "lavaan", "mvnfast", "sirt"),
-    fixed_objects = list(
-      ucov = UCOV,
-      n_waves = 4,
-      n_items = 5,
-      theta_growth = .50,
-      kappa1 = 0,
-      Psi_growth = matrix(c(.5, .089, .089, .1), nrow = 2),
-      kappa3 = -0.01,
-      phi33 = 0.004,
-      lambda_vec = c(.8, .5, .7, .65, .7),
-      nu_vec = c(0, .5, -.25, .25, -.5),
-      lambda_deviation =
-        list(`0.25` = rbind(0, 0, 0, 0, seq(0, 0.3, length.out = 4)),
-             `0.55` = rbind(0, 0,
-                            c(0, 0.2, 0.3, 0.1),
-                            c(0, -0.05, 0, 0.05),
-                            seq(0, 0.3, length.out = 4))),
-      nu_deviation =
-        list(`0.25` = rbind(0, 0, 0,
-                            seq(0, 0.75, length.out = 4),
-                            c(0, 0.125, -0.125, 0)),
-             `0.55` = rbind(c(0, 0.75, 0.5, 0.25),
-                            c(0, 0.25, 0, 0.50),
-                            0,
-                            seq(0, 0.75, length.out = 4),
-                            c(0, 0.125, -0.125, 0))),
-      ar_rho = .20  # autoregressive coefficient
-    ), 
-    seed = rep(670084, nrow(DESIGNFACTOR)),
+    fixed_objects = FIXEDOBJECTS, 
+    seed = rep(670084, nrow(DESIGNFACTOR[3, ])),
     save = TRUE,
     save_results = TRUE,
-    filename = "simulation/simres_2spa_only",
+    filename = "simulation/simres_2spa_only_test",
     save_details = list(
-      save_results_dirname = "simulation/simdetails_2spa_only"
+      save_results_dirname = "simulation/simdetails_2spa_only_test"
     ),
-    # allow_na = TRUE,
     parallel = TRUE,
-    ncores = min(4L, parallel::detectCores() - 1), 
-    notification = "condition"
+    ncores = min(4L, parallel::detectCores() - 1)#, 
+    # notification = "condition"
   )
