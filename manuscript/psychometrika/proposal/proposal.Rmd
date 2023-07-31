@@ -1,0 +1,159 @@
+---
+title: "Adjusting for Unreliability and Longitudinal Noninvariance in Latent Growth Modeling: A Two-Stage Path Analysis Approache"
+shorttitle: "2S-PA Growth"
+author: 
+  - name          : "Winnie Wing-Yee Tse"
+    affiliation   : "1"
+    corresponding : no    # Define only one corresponding author
+    email         : "wingyeet@usc.edu"
+  - name          : "Mark H. C. Lai"
+    affiliation   : "1"
+    corresponding : yes
+    address       : "University of Southern California, 3620 S McClintock Ave, Los Angeles, CA 90089"
+    email         : "hokchiol@usc.edu"
+    
+affiliation:
+  - id: "1"
+    institution: "\\protect{Department of Psychology, University of Southern California}"  # need protected text
+  # - id: "2"
+  #   institution: "A University Somewhere"
+
+authornote: |
+  \addORCIDlink{Winnie Wing-Yee Tse}{0000-0001-5175-6754}
+  
+  \addORCIDlink{Mark H. C. Lai}{0000-0002-9196-7406}
+  
+  <!-- https://tinyurl.com/ybremelq -->
+keywords: "keywords"
+wordcount: "X"
+bibliography: ["2spa_growth.bib"]
+floatsintext: no
+figurelist: no
+tablelist: no
+footnotelist: no
+linenumbers: yes
+mask: no
+draft: no
+header-includes:
+  - |
+    \makeatletter
+    \renewcommand{\paragraph}{\@startsection{paragraph}{4}{\parindent}%
+      {0\baselineskip \@plus 0.2ex \@minus 0.2ex}%
+      {-1em}%
+      {\normalfont\normalsize\bfseries\typesectitle}}
+    
+    \renewcommand{\subparagraph}[1]{\@startsection{subparagraph}{5}{1em}%
+      {0\baselineskip \@plus 0.2ex \@minus 0.2ex}%
+      {-\z@\relax}%
+      {\normalfont\normalsize\bfseries\itshape\hspace{\parindent}{#1}\textit{\addperi}}{\relax}}
+    \makeatother
+biblio-style: "apa"
+csl: "`r system.file('rmd', 'apa7.csl', package = 'papaja')`"
+documentclass: "apa7"
+classoption: "11pt, man"
+output: 
+  papaja::apa6_pdf:
+    # citation_package: biblatex
+    includes:
+      in_header: "preamble.tex"
+  papaja::apa6_word:
+    number_sections: false
+---
+
+```{r setup, include = FALSE}
+library(papaja)
+library(dplyr)
+# Custom knitr hook to add notes to the plot
+knitr::knit_hooks$set(plot = function(x, options) {
+  size = paste(c(sprintf("width=%s", options$out.width), 
+                 sprintf("height=%s", options$out.height), 
+                 options$out.extra), collapse = ",")
+  size = sprintf("[%s]", size)
+  cap = options$fig.cap
+  lab = paste0(options$fig.lp, options$label)
+  if (length(cap) && !is.na(cap)) {
+    cap = sprintf("\\caption{%s}%s\n", cap, 
+                  knitr:::create_label(lab, latex = TRUE))
+  }
+  note = options$fig.note
+  if (length(note) && !is.na(note)) {
+    note = sprintf("\\figurenote{%s}\n", note)
+  }
+  paste("\\begin{figure}\n",
+        cap,
+        "\\includegraphics", size, "{",
+        knitr::opts_knit$get("base.url"), paste(x, collapse = "."),
+        "}\n",
+        note,
+        "\\end{figure}",
+        sep = '')
+})
+```
+
+```{r analysis-preferences}
+# Seed for random number generation
+set.seed(42)
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+```
+
+Joint structural equation modeling (JSEM) has been the gold standard in modeling changes in latent constructs. This approach adjusts for biases due to measurement artifacts of the latent constructs (e.g., unreliability and longitudinal noninvariance) when estimating latent changes. However, models with the JSEM approach can easily get complex and become challenging to estimate, particularly in small samples. Alternatively, a two-stage path analysis (2S-PA) approach, where factor scores are obtained from measurement models in one stage and used to model latent changes in another stage, has been found to provide better small sample size properties (e.g., higher model convergence rate in complex models) than the JSEM approach [@lai2022]. While the 2S-PA approach has been developed to model structural relations among latent variables [e.g., mediation\; @lai2022], the current paper will extend this approach for latent growth modeling. We will perform a Monte Carlo simulation study to compare the 2S-PA approach with the JSEM approach, as well as common growth modeling approaches that use factor scores. We will demonstrate the 2S-PA approach to model latent changes with an empirical example. 
+
+## Longitudinal Invariance
+
+Latent growth modeling is a popular statistical technique in psychological and educational research to examine changes in a latent construct. For latent means and variances to be comparable, the latent construct needs to be measured similarly across measurement occasions---a condition known as measurement invariance, or longitudinal invariance in the context of longitudinal analysis [@cook2002; @grimm2016; @horn1992; @widaman2010]. If longitudinal invariance fails to hold, a condition named *longitudinal noninvariance*, comparisons of latent means and variances may still be permissible in a partial invariance model that correctly adjusts for the bias. 
+
+## Joint Structural Equation Modeling
+
+The gold standard for modeling changes in latent constructs has been through a second-order growth model, which accounts for measurement unreliability and longitudinal noninvariance. We refer to this approach as JSEM, which integrates measurement and structural models for the latent constructs across measurement occasions. Despite the flexibility in modeling latent changes, models with the JSEM approach can easily get complex and result in nonconvergence issues, particularly with multiple latent variables and a small sample size [@lai2022]. 
+
+Moreover, a long-standing concern with JSEM is that the parameter estimates in the measurement model can be affected by the structural paths [@bollen2007; @burt1976; @levy2017]. To briefly illustrate, Figure 1 shows an example using the data of Midlife in the United States [MIDUS\; @brim2020; @ryff2021] from National Archive of Computerized Data on Aging (NACDA). Suppose we are interested in predicting participants’ perceived purpose in life at Wave 2 by their attitudes toward personal growth at Wave 1. Whereas the factor loadings of the three items of Purpose in Life were 0.50, 0.45, and 0.75 in a one-factor model (Figure\ \@ref(fig:midus-ex)b), they changed to 0.60, 0.21, and 0.39 after adding a structural path from Personal Growth at Wave 1 to Purpose of Life at Wave 2 (Figure\ \@ref(fig:midus-ex)c). This example demonstrates a theoretical challenge in using JSEM that adding a structural path in a joint model can change the definition of a latent construct. 
+
+```{r}
+midus_note <- "
+An example based on Personal Growth and Purpose in Life scales from the MIDUS data. 
+"
+```
+
+```{r midus-ex, fig.note = midus_note, out.width = "480px"}
+knitr::include_graphics(
+  here::here("manuscript/psychometrika/proposal/figures/interpretational_confound.png")
+)
+```
+
+
+## Two-Stage Path Analysis
+
+@lai2021b proposed an alternative approach to JSEM---2S-PA---which separates the measurement and structural models into two stages. In the first stage, measurement invariance testing is performed, and factor scores and their reliability estimates are obtained from the full or partial invariance model. Biases due to noninvariance, if exist, are accounted for in the first stage. In the second stage, structural relations among latent constructs are modeled using the factor scores with constraints on the measurement parameters to control for measurement errors. As measurement and structural models are evaluated at different stages, structural paths among latent variables do not change the measurement parameter estimates. In other words, the 2S-PA approach retains the definitions of the latent constructs in the structural model. The 2S-PA approach has also been shown to overcome computational challenges in estimating complex models in small samples [@lai2022]. 
+<!-- The 2S-PA approach has the potential to avoid biases in structural path coefficients due to misspecifications in the measurement model, which is evaluated in a separate stage.  -->
+
+## Contributions
+
+The purpose of the current paper is to extend the 2S-PA approach for latent growth modeling and evaluate its performance in modeling latent changes. The contribution of the paper is three-folded. First, we will provide the mathematical development of the 2S-PA approach for adjusting for measurement unreliability and longitudinal noninvariance when modeling latent changes. Second, we will perform a Monte Carlo simulation study to evaluate the 2S-PA approach, in comparison with the JSEM approach and factor-score path analysis (FS-PA; i.e., a first-order growth model using factor scores). We aim to evaluate the accuracy, efficiency, and rate of model convergence of each approach in a variety of design conditions, including those with small sample sizes. Figure 2 shows the preliminary simulation results in terms of bias. Overall, the 2S-PA approach performed similarly to the JSEM approach, but the FS-PA approach showed biases in estimating the variance of the intercept factor and the mean and variance of the slope factor. In small sample conditions, whereas the 2S-PA approach showed a larger bias in estimating the mean of the slope factor, the JSEM approach showed a larger bias in estimating the mean of the intercept factor. Finally, we will demonstrate the 2S-PA approach with the MIDUS data and compare the results with those from the JSEM approach.
+
+```{r}
+plot_note <- "
+$\\kappa_2$ = mean of the slope factor. $r_{ni}/p_{ni}$ = proportion of noninvariance. $N$ = sample size. JSEM = joint structural equation model. TSPAB = 2S-PA with Bartlett scores. TSPAR = 2S-PA with regression scores. FSB = model with Bartlett scores only. FSR = model with regression scores only. 
+"
+```
+
+
+```{r bias-res, fig.note = plot_note, out.width = "480px"}
+knitr::include_graphics(here::here(
+  "manuscript/psychometrika/proposal/figures/bias_plots.png"
+))
+```
+
+
+\newpage
+
+# References
+
+::: {#refs custom-style="Bibliography"}
+:::
+
+<!-- \printbibliography -->
+<!-- \def\printbibliography{} -->
+
+<!-- # (APPENDIX) Appendix {-}  -->
+
+
