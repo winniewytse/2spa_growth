@@ -1,10 +1,10 @@
-# Proposal example
 
 # Setup ------------------------------------------------------------------------
 
 library(tidyverse)
 library(lavaan)
 library(R2spa)
+library(modelsummary)
 
 midus1_name <- load(here::here("data/02760-0001-Data.rda"))
 midus2_name <- load(here::here("data/04652-0001-Data.rda"))
@@ -47,36 +47,6 @@ midus_merged <- midus1_df |>
   # Convert items from factor to numeric 
   mutate_at(vars(learn1:done3), as.numeric) |>
   mutate_at(vars(matches("learn|newexp|purpose")), ~ 7 - .)
-
-
-# Personal growth model (Wave 1) -----------------------------------------------
-
-pg_mod <- "
-pg1 =~ learn1 + newexp1 + improve1
-"
-pg_fit <- cfa(pg_mod, midus_merged, std.lv = TRUE)
-parameterestimates(pg_fit)
-
-# Purpose of life model (Wave 1) -----------------------------------------------
-
-pl_mod <- "
-pl2 =~ purpose2 + future2 + done2
-"
-pl_fit <- cfa(pl_mod, midus_merged, std.lv = TRUE)
-parameterestimates(pl_fit)
-
-# Joint model ------------------------------------------------------------------
-
-joint_mod <- "
-pg1 =~ learn1 + newexp1 + improve1
-pl2 =~ purpose2 + future2 + done2
-
-pl2 ~ pg1
-"
-joint_fit <- sem(joint_mod, midus_merged, std.lv = TRUE)
-parameterestimates(joint_fit)
-
-# Archive ----------------------------------------------------------------------
 
 # Partial strict model ---------------------------------------------------------
 
@@ -203,6 +173,7 @@ eta1 ~~ psi1 * eta1
 psi1 + phi1 == 1
 "
 tspa_fit <- sem(tspa_mod, fs_pgrowth)
+saveRDS(tspa_fit, "manuscript/psychometrika/proposal/body/tspa_fit.rds")
 
 # JSEM -------------------------------------------------------------------------
 
@@ -213,13 +184,13 @@ eta2 =~ NA * learn2 + l1 * learn2 + l2 * newexp2 + l3 * improve2
 eta3 =~ NA * learn3 + l1 * learn3 + l2 * newexp3 + l3 * improve3
 
 # Measurement intercepts
-learn1 ~ nu1 * 1
+learn1 ~ 5.341 * 1
 newexp1 ~ nu2 * 1
 improve1 ~ nu31 * 1
-learn2 ~ nu1 * 1
+learn2 ~ 5.341 * 1
 newexp2 ~ nu2 * 1
 improve2 ~ nu3 * 1
-learn3 ~ nu1 * 1
+learn3 ~ 5.341 * 1
 newexp3 ~ nu2 * 1
 improve3 ~ nu3 * 1
 
@@ -252,7 +223,7 @@ s ~~ s
 i ~~ s
 
 # Means of level (fixed to zero for identification) and slope
-i ~ 0 * 1 
+i ~ 1 
 s ~ 1
 
 # Disturbances of latent outcomes
@@ -265,6 +236,32 @@ eta1 ~~ psi1 * eta1
 psi1 + phi1 == 1
 "
 jsem_fit <- sem(jsem_mod, midus_merged)
+saveRDS(jsem_fit, "manuscript/psychometrika/proposal/body/jsem_fit.rds")
+
+# Comparison -------------------------------------------------------------------
+
+msummary(
+  list(
+    "JSEM Growth" = jsem_fit, 
+    "2S-PA Growth" = tspa_fit
+  ),
+  output = "markdown",
+  statistic = "conf.int",
+  gof_omit = "IC", 
+  coef_map = c(
+    "i ~1 " = "Mean(Level)",
+    "s ~1 " = "Mean(Slope)",
+    "i ~~ i" = "Var(Level)",
+    "s ~~ s" = "Var(Slope)",
+    "i ~~ s" = "Cov(Level, Slope)"
+  )
+)
+
+# Archive ----------------------------------------------------------------------
+# (1) If the measurement model (e.g., constraining noninvariant items), is 
+#     mispecified, 2S-PA and JSEM also yield biased results---totally reasonable
+# (2) Loading estimates change in the JSEM even when we use the first loading
+#     estimate from the partial strict model
 
 # 2S-PA (misspecified) ---------------------------------------------------------
 
@@ -440,11 +437,13 @@ msummary(
 
 # Additional second-order growth model -----------------------------------------
 
+# Fix the first loading to obtain an interpretable metric
+
 add_jsem_mod <- "
 # Factor loadings
-eta1 =~ 0.848 * learn1 + l2 * newexp1 + l31 * improve1
-eta2 =~ 0.848 * learn2 + l2 * newexp2 + l3 * improve2
-eta3 =~ 0.848 * learn3 + l2 * newexp3 + l3 * improve3
+eta1 =~ 0.8477485 * learn1 + l2 * newexp1 + l31 * improve1
+eta2 =~ 0.8477485 * learn2 + l2 * newexp2 + l3 * improve2
+eta3 =~ 0.8477485 * learn3 + l2 * newexp3 + l3 * improve3
 
 # Measurement intercepts
 learn1 ~ nu1 * 1
