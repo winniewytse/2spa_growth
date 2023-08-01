@@ -94,6 +94,52 @@ pstrict_mod <- "
 pstrict_fit <- cfa(pstrict_mod, midus_merged)
 filter(parameterestimates(pstrict_fit), op == "=~")
 
+# Partial strict model (modified) ----------------------------------------------
+
+# As we identify the JSEM by fixing the first intercept to 5.341, 
+# the partial strict model for 2S-PA should also do so
+
+# Strict invariance model
+pstrict2_mod <- "
+    eta1 =~ NA * learn1 + (lam1) * learn1 + (lam2) * newexp1 + (lam31) * improve1
+		eta2 =~ NA * learn2 + (lam1) * learn2 + (lam2) * newexp2 + (lam3) * improve2
+		eta3 =~ NA * learn3 + (lam1) * learn3 + (lam2) * newexp3 + (lam3) * improve3
+		# Measurement intercepts
+    learn1 ~ 5.341 * 1
+    newexp1 ~ (nu2) * 1
+    improve1 ~ (nu31) * 1
+    learn2 ~ 5.341 * 1
+    newexp2 ~ (nu2) * 1
+    improve2 ~ (nu3) * 1
+    learn3 ~ 5.341 * 1
+    newexp3 ~ (nu2) * 1
+    improve3 ~ (nu3) * 1
+    # Unique factor variances
+    learn1 ~~ (theta11) * learn1
+    learn2 ~~ (theta1) * learn2
+    learn3 ~~ (theta1) * learn3
+    newexp1 ~~ (theta21) * newexp1
+    newexp2 ~~ (theta2) * newexp2
+    newexp3 ~~ (theta2) * newexp3
+    improve1 ~~ (theta3) * improve1
+    improve2 ~~ (theta3) * improve2
+    improve3 ~~ (theta3) * improve3
+    # Unique factor covariances
+    learn1 ~~ learn2 + learn3
+    learn2 ~~ learn3
+    newexp1 ~~ newexp2 + newexp3
+    newexp2 ~~ newexp3
+    improve1 ~~ improve2 + improve3
+    improve2 ~~ improve3
+    # First factor variance and mean to 1 and 0
+    eta1 ~~ 1 * eta1
+    eta1 ~ 0
+    # Other factor means to free
+    eta2 ~ NA * 1
+    eta3 ~ NA * 1
+"
+pstrict2_fit <- cfa(pstrict2_mod, midus_merged)
+
 # 2S-PA ------------------------------------------------------------------------
 
 get_tspa_mod <- function(data, vc, fsA) {
@@ -126,7 +172,8 @@ get_tspa_mod <- function(data, vc, fsA) {
   ),
   collpase = "\n")
 }
-fs_pgrowth <- get_fs(midus_merged, pstrict_mod, method = "Bartlett")
+# use the modified partial strict model (with first intercept fixed to 5.341)
+fs_pgrowth <- get_fs(midus_merged, pstrict2_mod, method = "Bartlett")
 tspa_pgrowth <- get_tspa_mod(midus_merged, 
                              vc = attr(fs_pgrowth, "av_efs"), 
                              fsA = attr(fs_pgrowth, "fsA"))
@@ -138,12 +185,12 @@ eta2 =~ 1 * fs_eta2
 eta3 =~ 1 * fs_eta3
 
 # Constrain the errors
-fs_eta1 ~~ 0.270712395783511 * fs_eta1
-fs_eta2 ~~ 0.0439357846685017 * fs_eta1
-fs_eta3 ~~ 0.0179222578946954 * fs_eta1
-fs_eta2 ~~ 0.536000083179472 * fs_eta2
-fs_eta3 ~~ 0.129328073618597 * fs_eta2
-fs_eta3 ~~ 0.521117152047182 * fs_eta3
+fs_eta1 ~~ 0.270717218049231 * fs_eta1
+fs_eta2 ~~ 0.0439407420246338 * fs_eta1
+fs_eta3 ~~ 0.017931427383321 * fs_eta1
+fs_eta2 ~~ 0.536005733793219 * fs_eta2
+fs_eta3 ~~ 0.12933395713976 * fs_eta2
+fs_eta3 ~~ 0.521124762579079 * fs_eta3
 
 # Constrain intercepts
 fs_eta1 ~ 0 * 1
